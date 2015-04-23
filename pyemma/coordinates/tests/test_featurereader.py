@@ -1,4 +1,3 @@
-
 # Copyright (c) 2015, 2014 Computational Molecular Biology Group, Free University
 # Berlin, 14195 Berlin, Germany.
 # All rights reserved.
@@ -22,6 +21,7 @@
 # ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+import os
 
 '''
 Created on 23.01.2015
@@ -29,163 +29,117 @@ Created on 23.01.2015
 @author: marscher
 '''
 import mdtraj
-import os
 import tempfile
 import unittest
-from pyemma.coordinates import api
-from pyemma.coordinates.data.feature_reader import FeatureReader
-from pyemma.util.log import getLogger
 import pkg_resources
-
 import numpy as np
-from pyemma.coordinates.api import feature_reader, discretizer, tica
+
+from pyemma.coordinates import api
+from pyemma.util.log import getLogger
 
 log = getLogger('TestFeatureReader')
 
 
-class TestFeatureReader(unittest.TestCase):
+class TestFeatureReaderPlainCoordinates(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        c = super(TestFeatureReader, cls).setUpClass()
         # create a fake trajectory which has 3 atoms and coordinates are just a range
         # over all frames.
-        cls.trajfile = tempfile.mktemp('.xtc')
+        cls.output_dir = tempfile.mkdtemp(suffix="test_feature_reader")
+
+        savers = ['.xtc',
+                  '.trr',
+                  '.pdb',
+                  '.dcd',
+                  '.h5',
+                  '.binpos',
+                  '.nc',
+                  '.netcdf',
+                  # '.crd', # broken writer
+                  # '.mdcrd', # broken writer
+                  '.ncdf',
+                  # '.lh5', # deprecated in mdtraj
+                  # '.lammpstrj', #
+                  '.xyz',
+                  '.gro']
+
+        supported_extensions = savers
+
+        cls.trajfiles = []
+
+        for ext in supported_extensions:
+            #attr_name = "trajfile_" + ext[1:]
+            f = tempfile.mktemp(suffix=ext, dir=cls.output_dir)
+            cls.trajfiles.append(f)
+
         cls.n_frames = 1000
-        cls.xyz = np.random.random(cls.n_frames * 3 * 3).reshape((cls.n_frames, 3, 3))
-        log.debug("shape traj: %s" % str(cls.xyz.shape))
+
+        cls.xyz = np.arange(cls.n_frames * 3 * 3).reshape((cls.n_frames, 3, 3))
+
         cls.topfile = pkg_resources.resource_filename(
             'pyemma.coordinates.tests.test_featurereader', 'data/test.pdb')
         t = mdtraj.load(cls.topfile)
         t.xyz = cls.xyz
         t.time = np.arange(cls.n_frames)
-        t.save(cls.trajfile)
-        return c
+
+        for fn in cls.trajfiles:
+            t.save(fn)
+
+            # generate test functions for all extension
+            _, ext = os.path.splitext(fn)
+
+            def method(self):
+                self._with_lag_and_stride(fn)
+
+            name = "test_with_lag_and_stride_" + ext[1:]
+            setattr(cls, name, method)
+
+        print dir(cls)
+
+        return cls
 
     @classmethod
     def tearDownClass(cls):
-        try:
-            os.unlink(cls.trajfile)
-        except EnvironmentError:
-            pass
+        import shutil
 
-    def testIteratorAccess(self):
-        reader = api.source(self.trajfile, top=self.topfile)
+        shutil.rmtree(cls.output_dir, ignore_errors=True)
 
-        frames = 0
-        data = []
-        for i, X in reader:
-            frames += X.shape[0]
-            data.append(X)
+    # dummy needed so nose executes this unittest
+    def test(self):
+        pass
 
-        # restore shape of input
-        data = np.array(data).reshape(self.xyz.shape)
+    def _with_lag_and_stride(self, filename):
+        reader = api.source(filename, top=self.topfile)
+        strides = [1, 2, 3, 5, 6, 10, 11, 13]
+        lags = [1, 2, 7, 11, 23]
 
-        self.assertEqual(frames, reader.trajectory_lengths()[0])
-        self.assertTrue(np.allclose(data, self.xyz))
+        xyz_flattened_2d = self.xyz.reshape((1000, 3 * 3))
+        for s in strides:
+            for t in lags:
+                chunks = []
+                chunks_lagged = []
+                for _, X, Y in reader.iterator(stride=s, lag=t):
+                    chunks.append(X)
+                    chunks_lagged.append(Y)
 
-    def testIteratorAccess2(self):
-        reader = FeatureReader([self.trajfile, self.trajfile], self.topfile)
-        reader.chunksize = 100
+                chunks = np.vstack(chunks)
+                chunks_lagged = np.vstack(chunks_lagged)
 
-        frames = 0
-        data = []
-        for i, X in reader:
-            frames += X.shape[0]
-            data.append(X)
-        self.assertEqual(frames, reader.trajectory_lengths()[0] * 2)
-        # restore shape of input
-        data = np.array(
-            data[0:reader.trajectory_lengths()[0] / reader.chunksize]).reshape(self.xyz.shape)
+                np.testing.assert_equal(chunks, xyz_flattened_2d[::s])
+                np.testing.assert_equal(chunks, xyz_flattened_2d[t::s])
 
-        self.assertTrue(np.allclose(data, self.xyz))
-
-    def testTimeLaggedIterator(self):
-        lag = 10
-        reader = FeatureReader(self.trajfile, self.topfile)
-        frames = 0
-        data = []
-        lagged = []
-        for _, X, Y in reader.iterator(lag=lag):
-            frames += X.shape[0]
-            data.append(X)
-            lagged.append(Y)
-
-        assert len(data) == len(lagged)
-        merged_lagged = np.concatenate(lagged, axis=0)  # .reshape(self.xyz.shape)
-
-        # reproduce outcome
-        xyz_s = self.xyz.shape
-        fake_lagged = np.empty((xyz_s[0]-lag, xyz_s[1]*xyz_s[2]))
-        fake_lagged = self.xyz.reshape((xyz_s[0], -1))[lag:]
-
-        self.assertTrue(np.allclose(merged_lagged, fake_lagged))
-
-        # restore shape of input
-        data = np.array(data).reshape(self.xyz.shape)
-
-        self.assertEqual(frames, reader.trajectory_lengths()[0])
-        self.assertTrue(np.allclose(data, self.xyz))
-        
-    def test_with_pipeline_time_lagged(self):
-        reader = feature_reader(self.trajfile, self.topfile)
-        #reader.featurizer.distances([[0, 1], [0, 2]])
-        t = tica(dim=2, lag=1)
-        d = discretizer(reader, t)
-        d.parametrize()
-
-    # @unittest.skip("")
-    def testTimeLaggedAccess(self):
-        # each frame has 2 atoms with 3 coords = 6 coords per frame.
-        # coords are sequential through all frames and start with 0.
-
-        lags = [2, 200]
-
-        chunksizes = [1, 100]
-
-        for lag in lags:
-            for chunksize in chunksizes:
-                log.info("chunksize=%i\tlag=%i" % (chunksize, lag))
-
-                lagged_chunks = []
-                reader = api.source(self.trajfile, top=self.topfile)
-                reader.chunksize = chunksize
-                for _, _, y in reader.iterator(lag=lag):
-                    lagged_chunks.append(y)
-
-                coords = self.xyz.reshape((self.xyz.shape[0], -1))
-
-                for ii, c in enumerate(lagged_chunks[:-1]):
-                    # all despite last chunk shall have chunksize
-                    self.assertTrue(c.shape[0] <= chunksize)
-                    # first lagged chunk should start at lag and stop at chunksize +
-                    # lag
-                    ind1 = ii * chunksize + lag
-                    ind2 = ind1 + chunksize
-                    #log.debug("coor slice[%i: %i]" % (ind1, ind2))
-                    np.testing.assert_allclose(c, coords[ind1:ind2])
-
-                # TODO: check last lagged frame
-
-                # last lagged chunk should miss "lag" frames of input! e.g
-                # padded to maintain chunksize
-
-                last_chunk = lagged_chunks[-1]
-                # print last_chunk
-                # when is last_chunk padded?
-                # if
-                # how many zeros are going to be used?
-
-
-#                 expected = np.empty((chunksize, 2, 3))
-#                 for ii, c in enumerate(xrange(chunksize)):
-#                     c += 1
-#                     expected[ii] = coords[-c]
-# expected  = np.array((coords[-2], coords[-1]))
-#                 print last_chunk
-#                 print "-"*10
-#                 print expected
-                # np.testing.assert_allclose(last_chunk, expected)
+#     def test_with_lag_and_stride_xtc(self):
+#         self._with_lag_and_stride(self.trajfile_xtc)
+#
+#     def test_with_lag_and_stride_dcd(self):
+#         self._with_lag_and_stride(self.trajfile_dcd)
+#
+#     def test_with_lag_and_stride_trr(self):
+#         self._with_lag_and_stride(self.trajfile_trr)
+#
+#     def test_with_lag_and_stride_binpos(self):
+#         self._with_lag_and_stride(self.trajfile_binpos)
 
 if __name__ == "__main__":
     unittest.main()
