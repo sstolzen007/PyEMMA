@@ -84,11 +84,11 @@ def setUpClass(cls):
         _, ext = os.path.splitext(fn)
 
         def method(self, fn=fn):
-            if ext == '.gro':
-                pass_top = False
-            else:
-                pass_top = True
-            self._with_lag_and_stride(fn, pass_top)
+#             if ext == '.gro':
+#                 pass_top = False
+#             else:
+#                 pass_top = True
+            self._with_lag_and_stride(fn)#, pass_top)
 
         name = "test_with_lag_and_stride_" + ext[1:]
         setattr(cls, name, method)
@@ -112,7 +112,7 @@ class TestFeatureReader(unittest.TestCase):
         if pass_topology:
             reader = api.source(filename, top=self.topfile)
         else:
-            reader = api.source()
+            reader = api.source(filename, top=None)
         strides = [1, 2, 3, 5, 6, 10, 11, 13]
         lags = [1, 2, 7, 11, 23]
 
@@ -128,8 +128,10 @@ class TestFeatureReader(unittest.TestCase):
                 chunks = np.vstack(chunks)
                 chunks_lagged = np.vstack(chunks_lagged)
 
-                np.testing.assert_equal(chunks, xyz_flattened_2d[::s])
-                np.testing.assert_equal(chunks, xyz_flattened_2d[t::s])
+                np.testing.assert_equal(chunks, xyz_flattened_2d[::s], err_msg=
+                                        "stride=%i; lag=%i")
+                np.testing.assert_equal(chunks, xyz_flattened_2d[t::s], err_msg=
+                                        "stride=%i; lag=%i")
 
 setUpClass(TestFeatureReader)
 

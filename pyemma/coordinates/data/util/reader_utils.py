@@ -82,7 +82,7 @@ def create_file_reader(input_files, topology, featurizer):
                 if suffix in _FormatRegistry.loaders.keys():
                     # check: do we either have a featurizer or a topology file name? If not: raise ValueError.
                     # create a MD reader with file names and topology
-                    if not featurizer and not topology:
+                    if not featurizer and not topology and suffix not in ('.netcdf', '.ncdf', '.nc'):
                         raise ValueError("The input files were MD files which makes it mandatory to have either a "
                                          "featurizer or a topology file.")
 
