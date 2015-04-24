@@ -87,12 +87,11 @@ def create_file_reader(input_files, topology, featurizer):
                                          "featurizer or a topology file.")
 
                     reader = _FeatureReader(input_list, featurizer=featurizer, topologyfile=topology)
+                elif suffix in ('.npy', '.npz'):
+                    reader = _NumPyFileReader(input_list)
+                # otherwise we assume that given files are ascii tabulated data
                 else:
-                    if suffix in ['.npy', '.npz']:
-                        reader = _NumPyFileReader(input_list)
-                    # otherwise we assume that given files are ascii tabulated data
-                    else:
-                        reader = _CSVReader(input_list)
+                    reader = _CSVReader(input_list)
         else:
             raise ValueError("Not all elements in the input list were of the type %s!" % suffix)
     else:
