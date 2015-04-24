@@ -43,10 +43,10 @@ from scipy.sparse.sputils import isdense as _isdense
 from pyemma.util.annotators import shortcut
 
 # type-checking
-from pyemma.util.types import ensure_int_array as _ensure_int_array
-from pyemma.util.types import ensure_float_array as _ensure_float_array
-from pyemma.util.types import ensure_int_array_or_None as _ensure_int_array_or_None
-from pyemma.util.types import ensure_float_array_or_None as _ensure_float_array_or_None
+from pyemma.util.types import ensure_int_vector as _ensure_int_vector
+from pyemma.util.types import ensure_float_vector as _ensure_float_vector
+from pyemma.util.types import ensure_int_vector_or_None as _ensure_int_vector_or_None
+from pyemma.util.types import ensure_float_vector_or_None as _ensure_float_vector_or_None
 
 import dense.assessment
 import dense.committor
@@ -323,7 +323,7 @@ def is_reversible(T, mu=None, tol=1e-12):
         
     """
     # check input
-    mu = _ensure_float_array_or_None(mu, require_order=True)
+    mu = _ensure_float_vector_or_None(mu, require_order=True)
     # go
     if _issparse(T):
         return sparse.assessment.is_reversible(T, mu, tol)
@@ -695,8 +695,8 @@ def mfpt(T, target, origin=None, tau=1, mu=None):
     
     """
     # check inputs
-    target = _ensure_int_array(target)
-    origin = _ensure_int_array_or_None(origin)
+    target = _ensure_int_vector(target)
+    origin = _ensure_int_vector_or_None(origin)
     # go
     if _issparse(T):
         if origin is None:
@@ -731,7 +731,7 @@ def hitting_probability(P, target):
     h : ndarray(n)
         a vector with hitting probabilities
     """
-    target = _ensure_int_array(target)
+    target = _ensure_int_vector(target)
     if _issparse(P):
         _showSparseConversionWarning()  # currently no sparse implementation!
         return dense.hitting_probability.hitting_probability(P.toarray(), target)
@@ -850,8 +850,8 @@ def committor(T, A, B, forward=True, mu=None):
     array([ 1.        ,  0.45454545,  0.        ])
     
     """
-    A = _ensure_int_array(A)
-    B = _ensure_int_array(B)
+    A = _ensure_int_vector(A)
+    B = _ensure_int_vector(B)
     if _issparse(T):
         if forward:
             return sparse.committor.forward_committor(T, A, B)
@@ -923,7 +923,7 @@ def expected_counts(T, p0, N):
         
     """
     # check input
-    p0 = _ensure_float_array(p0, require_order=True)
+    p0 = _ensure_float_vector(p0, require_order=True)
     # go
     if _issparse(T):
         return sparse.expectations.expected_counts(p0, T, N)
@@ -978,7 +978,7 @@ def expected_counts_stationary(T, N, mu=None):
     
     """
     # check input
-    mu = _ensure_float_array_or_None(mu, require_order=True)
+    mu = _ensure_float_vector_or_None(mu, require_order=True)
     # go
     if _issparse(T):
         return sparse.expectations.expected_counts_stationary(T, N, mu=mu)
@@ -1089,8 +1089,8 @@ def fingerprint_correlation(T, obs1, obs2=None, tau=1, k=None, ncv=None):
     
     """
     # check input
-    obs1 = _ensure_float_array(obs1, require_order=True)
-    obs2 = _ensure_float_array_or_None(obs2, require_order=True)
+    obs1 = _ensure_float_vector(obs1, require_order=True)
+    obs2 = _ensure_float_vector_or_None(obs2, require_order=True)
     # go
     if _issparse(T):
         return sparse.fingerprints.fingerprint_correlation(T, obs1, obs2=obs2, tau=tau, k=k, ncv=ncv)
@@ -1179,8 +1179,8 @@ def fingerprint_relaxation(T, p0, obs, tau=1, k=None, ncv=None):
         
     """
     # check input
-    p0 = _ensure_float_array(p0, require_order=True)
-    obs = _ensure_float_array(obs, require_order=True)
+    p0 = _ensure_float_vector(p0, require_order=True)
+    obs = _ensure_float_vector(obs, require_order=True)
     # go
     if _issparse(T):
         return sparse.fingerprints.fingerprint_relaxation(T, p0, obs, tau=tau, k=k, ncv=ncv)
@@ -1231,8 +1231,8 @@ def expectation(T, a, mu=None):
     
     """
     # check input
-    a = _ensure_float_array(a, require_order=True)
-    mu = _ensure_float_array_or_None(mu, require_order=True)
+    a = _ensure_float_vector(a, require_order=True)
+    mu = _ensure_float_vector_or_None(mu, require_order=True)
     # go
     if not mu:
         mu = stationary_distribution(T)
@@ -1315,9 +1315,9 @@ def correlation(T, obs1, obs2=None, times=[1], k=None, ncv=None):
     
     """
     # check input
-    obs1 = _ensure_float_array(obs1, require_order=True)
-    obs2 = _ensure_float_array_or_None(obs2, require_order=True)
-    times = _ensure_int_array(times, require_order=True)
+    obs1 = _ensure_float_vector(obs1, require_order=True)
+    obs2 = _ensure_float_vector_or_None(obs2, require_order=True)
+    times = _ensure_int_vector(times, require_order=True)
     # go
     if _issparse(T):
         return sparse.fingerprints.correlation(T, obs1, obs2=obs2, times=times, k=k, ncv=ncv)
@@ -1389,9 +1389,9 @@ def relaxation(T, p0, obs, times=[1], k=None, ncv=None):
     
     """
     # check input
-    p0 = _ensure_float_array(p0, require_order=True)
-    obs = _ensure_float_array(obs, require_order=True)
-    times = _ensure_int_array(times, require_order=True)
+    p0 = _ensure_float_vector(p0, require_order=True)
+    obs = _ensure_float_vector(obs, require_order=True)
+    times = _ensure_int_vector(times, require_order=True)
     # go
     if _issparse(T):
         return sparse.fingerprints.relaxation(T, p0, obs, k=k, times=times)
@@ -1759,7 +1759,7 @@ def mfpt_sensitivity(T, target, i):
     
     """
     # check input
-    target = _ensure_int_array(target)
+    target = _ensure_int_vector(target)
     # go
     if _issparse(T):
         _showSparseConversionWarning()
@@ -1796,8 +1796,8 @@ def committor_sensitivity(T, A, B, i, forward=True):
     
     """
     # check inputs
-    A = _ensure_int_array(A)
-    B = _ensure_int_array(B)
+    A = _ensure_int_vector(A)
+    B = _ensure_int_vector(B)
     if _issparse(T):
         _showSparseConversionWarning()
         committor_sensitivity(T.todense(), A, B, i, forward)
@@ -1827,7 +1827,7 @@ def expectation_sensitivity(T, a):
     
     """
     # check input
-    a = _ensure_float_array(a, require_order=True)
+    a = _ensure_float_vector(a, require_order=True)
     # go
     if _issparse(T):
         _showSparseConversionWarning()
