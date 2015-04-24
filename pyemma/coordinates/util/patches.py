@@ -105,8 +105,8 @@ def iterload(filename, chunk=100, **kwargs):
 
             with HDF5TrajectoryFile(filename) as f:
                 if skip > 0:
-                    xyz, _, _, _ = f.read(skip, atom_indices=atom_indices)
-                    if len(xyz) == 0:
+                    data = f.read(skip, atom_indices=atom_indices)
+                    if data == []:
                         raise StopIteration()
                 if atom_indices is None:
                     topology = f.topology
