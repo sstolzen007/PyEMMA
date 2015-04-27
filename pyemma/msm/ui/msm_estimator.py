@@ -77,15 +77,16 @@ class MSMEstimator:
         # set active set
         if self._connectivity == 'largest':
             # the largest connected set is the active set. This is at the same time a mapping from active to full
-            self._active_set = self._dtrajstats.largest_connected_set()
+            self._active_set = self._dtrajstats.largest_connected_set
         else:
             # for 'None' and 'all' all visited states are active
-            self._active_set = self._dtrajstats.visited_set()
+            self._active_set = self._dtrajstats.visited_set
 
         # number of states in active set
         self._nstates = len(self._active_set)
 
-        # active set count matrix
+        # count matrices
+        self._C_full = self._dtrajstats.count_matrix()
         self._C_active = self._dtrajstats.count_matrix(subset=self._active_set)
 
         # computed derived quantities
@@ -133,6 +134,11 @@ class MSMEstimator:
         return self._dtrajstats.nstates
 
     @property
+    def lagtime(self):
+        """ The lag time in steps """
+        return self._lag
+
+    @property
     def is_reversible(self):
         """Returns whether the MSM is reversible """
         return self._reversible
@@ -141,6 +147,11 @@ class MSMEstimator:
     def is_sparse(self):
         """Returns whether the MSM is sparse """
         return self._sparse
+
+    @property
+    def connectivity(self):
+        """Returns the connectivity mode of the MSM """
+        return self._connectivity
 
     @property
     def dt(self):
@@ -166,14 +177,24 @@ class MSMEstimator:
 
         """
         self._assert_estimated()
-        return self._dtrajstats.dtrajs
+        return self._dtrajstats.discrete_trajectories
 
+
+    @property
+    def active_set(self):
+        """
+        The reversible connected sets of states, sorted by size (descending)
+
+        """
+        self._assert_estimated()
+        return self._active_set
     @property
     def connected_sets(self):
         """
         The reversible connected sets of states, sorted by size (descending)
 
         """
+        self._assert_estimated()
         return self._dtrajstats.connected_sets
 
     @property
@@ -188,7 +209,7 @@ class MSMEstimator:
         self._assert_estimated()
         # compute connected dtrajs
         self._dtrajs_active = []
-        for dtraj in self._dtrajstats.dtrajs:
+        for dtraj in self._dtrajstats.discrete_trajectories:
             self._dtrajs_active.append(self._full2active[dtraj])
 
         return self._dtrajs_active
