@@ -1,3 +1,5 @@
+import os
+from mdtraj.formats.netcdf import NetCDFTrajectoryFile
 
 # Copyright (c) 2015, 2014 Computational Molecular Biology Group, Free University
 # Berlin, 14195 Berlin, Germany.
@@ -99,6 +101,8 @@ def iterload(filename, chunk=100, **kwargs):
     # If chunk was 0 then we want to avoid filetype-specific code in case of undefined behavior in various file parsers.
     else:
         skip = kwargs.pop('skip', 0)
+        _, ext = os.path.splitext(filename)
+
         if filename.endswith('.h5'):
             if 'top' in kwargs:
                 warnings.warn('top= kwarg ignored since file contains topology information')
@@ -183,6 +187,22 @@ def iterload(filename, chunk=100, **kwargs):
                     ptr += len(xyz)*stride
                     yield Trajectory(xyz=xyz, topology=topology, time=time, unitcell_lengths=box_length,
                                      unitcell_angles=box_angle)
+
+        elif ext in ('.netcdf', '.ncdf', '.nc'):
+            topology = _parse_topology(kwargs.get('top', None))
+
+            with NetCDFTrajectoryFile(filename) as f:
+                if skip > 0:
+                    xyz, _, _, _ = f.read(skip, atom_indices=atom_indices)
+                    if not xyz:
+                        raise StopIteration()
+                while True:
+                    xyz, time, unitcell_lengths, unitcell_angles = f.read(chunk, stride=stride, atom_indices=atom_indices)
+                if not xyz:
+                    raise StopIteration()
+                in_units_of(xyz, f.distance_unit, Trajectory._distance_unit, inplace=True)
+                in_units_of(unitcell_lengths, f.distance_unit, Trajectory._distance_unit, inplace=True)
+                yield Trajectory(xyz, topology, time, unitcell_lengths, unitcell_angles)
 
         else:
             log.critical("loading complete traj into mem! This might no be desired.")
