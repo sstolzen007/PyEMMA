@@ -34,6 +34,7 @@ and provides them for later access.
 
 __docformat__ = "restructuredtext en"
 
+import copy
 import numpy as np
 from math import ceil
 from pyemma.util import types as _types
@@ -73,7 +74,7 @@ class MSM(object):
 
         # set inputs
         # set transition matrix
-        self._T = T
+        self._T = copy.deepcopy(T)
         # nstates
         self._nstates = np.shape(T)[0]
         # set time step
