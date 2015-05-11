@@ -58,7 +58,8 @@ def setUpClass(cls):
               # '.lh5', # deprecated in mdtraj
               # '.lammpstrj', #
               '.xyz',
-              '.gro']
+              #'.gro',
+              ]
 
     supported_extensions = savers
 
@@ -78,20 +79,26 @@ def setUpClass(cls):
     t.xyz = cls.xyz
     t.time = np.arange(cls.n_frames)
     for fn in cls.trajfiles:
+        _, ext = os.path.splitext(fn)
         t.save(fn)
 
         # generate test functions for all extension
-        _, ext = os.path.splitext(fn)
+        def method_w_lag_and_stride(self, fn=fn):
+            self._with_lag_and_stride(fn)
 
-        def method(self, fn=fn):
-#             if ext == '.gro':
-#                 pass_top = False
-#             else:
-#                 pass_top = True
-            self._with_lag_and_stride(fn)#, pass_top)
+        def method_w_stride(self, fn=fn):
+            self._with_stride(fn)
+
+        def method_w_lag(self, fn=fn):
+            self._with_lag(fn)
 
         name = "test_with_lag_and_stride_" + ext[1:]
-        setattr(cls, name, method)
+        name_stride = "test_with_stride_" + ext[1:]
+        name_lag = "test_with_lag_" + ext[1:]
+
+        setattr(cls, name, method_w_lag_and_stride)
+        setattr(cls, name_stride, method_w_stride)
+        setattr(cls, name_lag, method_w_lag)
 
     return cls
 
@@ -108,17 +115,54 @@ class TestFeatureReader(unittest.TestCase):
     def test_dummy(self):
         pass
 
+    def _with_lag(self, filename):
+        reader = api.source(filename, top=self.topfile)
+
+        log.debug("testing lag access for traj '%s'" % filename)
+        lags = [1, 2, 7, 11, 23]
+
+        xyz_flattened_2d = self.xyz.reshape((1000, 3 * 3))
+        for t in lags:
+            log.debug("lag = %i" % t)
+            chunks_lagged = []
+            for _, _, Y in reader.iterator(lag=t):
+                chunks_lagged.append(Y)
+
+            chunks_lagged = np.vstack(chunks_lagged)
+
+            np.testing.assert_equal(
+                chunks_lagged, xyz_flattened_2d[t::], err_msg="lag=%i" % t)
+
+    def _with_stride(self, filename):
+        reader = api.source(filename, top=self.topfile)
+
+        # strides has to be divisors of chunksize
+        # TODO: shall we catch this situation in Transformers and set matching chunksize then?
+        strides = [1, 2, 5, 10, 25, ]
+
+        xyz_flattened_2d = self.xyz.reshape((1000, 3 * 3))
+
+        for s in strides:
+            log.debug("stride = %i" % (s))
+            chunks = []
+            for _, X in reader.iterator(stride=s):
+                chunks.append(X)
+
+            chunks = np.vstack(chunks)
+
+            np.testing.assert_equal(
+                chunks, xyz_flattened_2d[::s], err_msg="stride=%i; lag=%i")
+
     def _with_lag_and_stride(self, filename, pass_topology=True):
-        if pass_topology:
-            reader = api.source(filename, top=self.topfile)
-        else:
-            reader = api.source(filename, top=None)
-        strides = [1, 2, 3, 5, 6, 10, 11, 13]
+        reader = api.source(filename, top=self.topfile)
+        log.debug("testing lag/stridden access for traj '%s'" % filename)
+        strides = [1, 2, 5, 10, 20]
         lags = [1, 2, 7, 11, 23]
 
         xyz_flattened_2d = self.xyz.reshape((1000, 3 * 3))
         for s in strides:
             for t in lags:
+                log.debug("stride = %i, lag = %i" % (s, t))
                 chunks = []
                 chunks_lagged = []
                 for _, X, Y in reader.iterator(stride=s, lag=t):
@@ -128,10 +172,10 @@ class TestFeatureReader(unittest.TestCase):
                 chunks = np.vstack(chunks)
                 chunks_lagged = np.vstack(chunks_lagged)
 
-                np.testing.assert_equal(chunks, xyz_flattened_2d[::s], err_msg=
-                                        "stride=%i; lag=%i")
-                np.testing.assert_equal(chunks, xyz_flattened_2d[t::s], err_msg=
-                                        "stride=%i; lag=%i")
+                np.testing.assert_equal(
+                    chunks, xyz_flattened_2d[::s], err_msg="stride=%i; lag=%i" % (s, t))
+                np.testing.assert_equal(
+                    chunks_lagged, xyz_flattened_2d[t::s], err_msg="stride=%i; lag=%i" % (s, t))
 
 setUpClass(TestFeatureReader)
 
