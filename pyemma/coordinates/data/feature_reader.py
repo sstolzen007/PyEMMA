@@ -230,7 +230,7 @@ class FeatureReader(ReaderInterface):
                 # lag time or trajectory index changed, so open lagged iterator
                 if __debug__:
                     self._logger.debug("open time lagged iterator for traj %i with lag %i"
-                                       % (self._itraj, self._curr_lag))
+                                       % (self._itraj, lag))
                 self._curr_lag = lag
                 self._mditer2 = self._create_iter(self.trajfiles[self._itraj],
                                                   skip=self._curr_lag*stride, stride=stride) 
