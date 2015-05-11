@@ -1,6 +1,3 @@
-import os
-from mdtraj.formats.netcdf import NetCDFTrajectoryFile
-
 # Copyright (c) 2015, 2014 Computational Molecular Biology Group, Free University
 # Berlin, 14195 Berlin, Germany.
 # All rights reserved.
@@ -32,6 +29,7 @@ Created on 13.03.2015
 '''
 import numpy as np
 import warnings
+import os
 
 from mdtraj.utils.validation import cast_indices
 from mdtraj.core.trajectory import load, Trajectory, _parse_topology
@@ -40,6 +38,7 @@ from mdtraj.utils.unit import in_units_of
 from mdtraj.formats.lh5 import LH5TrajectoryFile
 from mdtraj.formats import DCDTrajectoryFile
 from mdtraj.formats import XTCTrajectoryFile
+from mdtraj.formats.netcdf import NetCDFTrajectoryFile
 
 from pyemma.util.log import getLogger
 
@@ -80,9 +79,9 @@ def iterload(filename, chunk=100, **kwargs):
     Examples
     --------
 
-    >>> import mdtraj as md
-    >>> for chunk in md.iterload('output.xtc', top='topology.pdb')
-    >>>     print chunk
+    >>> import mdtraj as md # doctest: +SKIP
+    >>> for chunk in md.iterload('output.xtc', top='topology.pdb') # doctest: +SKIP
+    ...     print chunk # doctest: +SKIP
 
     <mdtraj.Trajectory with 100 frames, 423 atoms at 0x110740a90>
     <mdtraj.Trajectory with 100 frames, 423 atoms at 0x110740a90>
@@ -92,26 +91,26 @@ def iterload(filename, chunk=100, **kwargs):
 
     """
     stride = kwargs.get('stride', 1)
+    skip = kwargs.pop('skip', 0)
+
+    _, ext = os.path.splitext(filename)
+
     atom_indices = cast_indices(kwargs.get('atom_indices', None))
-    if chunk % stride != 0 and filename.endswith('.dcd'):
+    if chunk % stride != 0:
         raise ValueError('Stride must be a divisor of chunk. stride=%d does not go '
                          'evenly into chunk=%d' % (stride, chunk))
     if chunk == 0:
-        yield load(filename, **kwargs)
-    # If chunk was 0 then we want to avoid filetype-specific code in case of undefined behavior in various file parsers.
+        yield load(filename, **kwargs)[skip:]
+    # If chunk was 0 then we want to avoid filetype-specific code in case of
+    # undefined behavior in various file parsers.
     else:
-        skip = kwargs.pop('skip', 0)
-        _, ext = os.path.splitext(filename)
-
         if filename.endswith('.h5'):
             if 'top' in kwargs:
                 warnings.warn('top= kwarg ignored since file contains topology information')
 
             with HDF5TrajectoryFile(filename) as f:
                 if skip > 0:
-                    data = f.read(skip, atom_indices=atom_indices)
-                    if data == []:
-                        raise StopIteration()
+                    f.seek(skip)
                 if atom_indices is None:
                     topology = f.topology
                 else:
@@ -138,9 +137,8 @@ def iterload(filename, chunk=100, **kwargs):
 
                 ptr = 0
                 if skip > 0:
-                    xyz, _, _, _ = f.read(skip, atom_indices=atom_indices)
-                    if len(xyz) == 0:
-                        raise StopIteration()
+                    f.seek(skip)
+                    ptr += skip
                 while True:
                     xyz = f.read(chunk*stride, stride=stride, atom_indices=atom_indices)
                     if len(xyz) == 0:
@@ -154,9 +152,7 @@ def iterload(filename, chunk=100, **kwargs):
             topology = _parse_topology(kwargs.get('top', None))
             with XTCTrajectoryFile(filename) as f:
                 if skip > 0:
-                    xyz, _, _, _ = f.read(skip)
-                    if len(xyz) == 0:
-                        raise StopIteration()
+                    f.seek(skip)
                 while True:
                     xyz, time, step, box = f.read(chunk*stride, stride=stride, atom_indices=atom_indices)
                     if len(xyz) == 0:
@@ -172,9 +168,8 @@ def iterload(filename, chunk=100, **kwargs):
             with DCDTrajectoryFile(filename) as f:
                 ptr = 0
                 if skip > 0:
-                    xyz, _, _ = f.read(skip, atom_indices=atom_indices)
-                    if len(xyz) == 0:
-                        raise StopIteration()
+                    f.seek(skip)
+                    ptr += skip
                 while True:
                     # for reasons that I have not investigated, dcdtrajectory file chunk and stride
                     # together work like this method, but HDF5/XTC do not.
@@ -193,19 +188,19 @@ def iterload(filename, chunk=100, **kwargs):
 
             with NetCDFTrajectoryFile(filename) as f:
                 if skip > 0:
-                    xyz, _, _, _ = f.read(skip, atom_indices=atom_indices)
-                    if not xyz:
-                        raise StopIteration()
+                    f.seek(skip)
                 while True:
                     xyz, time, unitcell_lengths, unitcell_angles = f.read(chunk, stride=stride, atom_indices=atom_indices)
-                if not xyz:
+                if xyz.size == 0:
                     raise StopIteration()
                 in_units_of(xyz, f.distance_unit, Trajectory._distance_unit, inplace=True)
                 in_units_of(unitcell_lengths, f.distance_unit, Trajectory._distance_unit, inplace=True)
                 yield Trajectory(xyz, topology, time, unitcell_lengths, unitcell_angles)
 
         else:
-            log.critical("loading complete traj into mem! This might no be desired.")
+            log.critical(
+                "loading complete traj '%s' into mem!"
+                " This might no be desired." % filename)
             t = load(filename, **kwargs)
             for i in range(skip, len(t), chunk):
                 yield t[i:i+chunk]
