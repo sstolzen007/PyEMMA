@@ -185,7 +185,7 @@ def iterload(filename, chunk=100, **kwargs):
 
         elif ext in ('.netcdf', '.ncdf', '.nc'):
             topology = _parse_topology(kwargs.get('top', None))
-
+ 
             with NetCDFTrajectoryFile(filename) as f:
                 if skip > 0:
                     f.seek(skip)
@@ -195,7 +195,7 @@ def iterload(filename, chunk=100, **kwargs):
                     raise StopIteration()
                 in_units_of(xyz, f.distance_unit, Trajectory._distance_unit, inplace=True)
                 in_units_of(unitcell_lengths, f.distance_unit, Trajectory._distance_unit, inplace=True)
-                yield Trajectory(xyz, topology, time, unitcell_lengths, unitcell_angles)
+                yield Trajectory(xyz[:], topology, time[:], unitcell_lengths[:], unitcell_angles[:])
 
         else:
             log.critical(
@@ -204,3 +204,23 @@ def iterload(filename, chunk=100, **kwargs):
             t = load(filename, **kwargs)
             for i in range(skip, len(t), chunk):
                 yield t[i:i+chunk]
+
+
+import code, traceback, signal
+
+def debug(sig, frame):
+    """Interrupt running process, and provide a python prompt for
+    interactive debugging."""
+    d={'_frame':frame}         # Allow access to frame object.
+    d.update(frame.f_globals)  # Unless shadowed by global
+    d.update(frame.f_locals)
+
+    i = code.InteractiveConsole(d)
+    message  = "Signal received : entering python shell.\nTraceback:\n"
+    message += ''.join(traceback.format_stack(frame))
+    i.interact(message)
+
+def listen():
+    signal.signal(signal.SIGUSR1, debug)  # Register handler
+    
+listen()
